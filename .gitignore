@@ -2,7 +2,7 @@ node_modules
 .DS_Store
 .tmp
 tmp
-dist
+# dist
 npm-debug.log*
 package-lock.json
 yarn.lock
