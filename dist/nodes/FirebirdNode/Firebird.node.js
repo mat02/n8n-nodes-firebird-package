@@ -193,7 +193,7 @@ class Firebird {
                                 throw new n8n_workflow_1.NodeOperationError(this.getNode(), `The parameter "${paramName}" is unknown!`);
                             }
                             queryItems.push(insertItems[paramName]);
-                            parametrizedQuery = parametrizedQuery.substring(0, match.index) + '?' + parametrizedQuery.substring((_a = match.index) !== null && _a !== void 0 ? _a : 0 + 1 + match[2].length);
+                            parametrizedQuery = parametrizedQuery.substring(0, match.index) + '?' + parametrizedQuery.substring(((_a = match.index) !== null && _a !== void 0 ? _a : 0) + 1 + match[2].length);
                         }
                         if (queryItems.length > 0) {
                             return db.queryAsync(parametrizedQuery, queryItems);
