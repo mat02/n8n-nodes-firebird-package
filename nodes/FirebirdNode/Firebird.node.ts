@@ -221,7 +221,7 @@ export class Firebird implements INodeType {
 								throw new NodeOperationError(this.getNode(), `The parameter "${paramName}" is unknown!`);
 							}
 							queryItems.push(insertItems[paramName]);
-							parametrizedQuery = parametrizedQuery.substring(0, match.index) + '?' + parametrizedQuery.substring(match.index ?? 0 + 1 + match[2].length);
+							parametrizedQuery = parametrizedQuery.substring(0, match.index) + '?' + parametrizedQuery.substring((match.index ?? 0) + 1 + match[2].length);
 						}
 						if (queryItems.length > 0) {
 							return db.queryAsync(parametrizedQuery, queryItems);
