@@ -211,11 +211,15 @@ export class Firebird implements INodeType {
 						const params = paramsString.split(',').map(param => param.trim());
 
 						const insertItems = copyInputItems([items[index]], params)[0];
-						const matchedParams = rawQuery.matchAll(/(:)([_a-zA-Z0-9]+)/gm);
 						
 						let parametrizedQuery = rawQuery;
-						let queryItems = [];
-						for (const match of matchedParams) {
+						let queryItems: any[] = [];
+						let match;
+
+						const re = /(:)([_a-zA-Z0-9]+)/gm;
+
+						while ((match = re.exec(parametrizedQuery)) !== null)
+						{
 							const paramName = match[2];
 							if (!params.includes(paramName)) {
 								throw new NodeOperationError(this.getNode(), `The parameter "${paramName}" is unknown!`);
@@ -223,6 +227,7 @@ export class Firebird implements INodeType {
 							queryItems.push(insertItems[paramName]);
 							parametrizedQuery = parametrizedQuery.substring(0, match.index) + '?' + parametrizedQuery.substring((match.index ?? 0) + 1 + match[2].length);
 						}
+
 						if (queryItems.length > 0) {
 							return db.queryAsync(parametrizedQuery, queryItems);
 						} else {
