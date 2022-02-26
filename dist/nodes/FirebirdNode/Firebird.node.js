@@ -184,10 +184,11 @@ class Firebird {
                         const paramsString = this.getNodeParameter('params', 0);
                         const params = paramsString.split(',').map(param => param.trim());
                         const insertItems = GenericFunctions_1.copyInputItems([items[index]], params)[0];
-                        const matchedParams = rawQuery.matchAll(/(:)([_a-zA-Z0-9]+)/gm);
                         let parametrizedQuery = rawQuery;
                         let queryItems = [];
-                        for (const match of matchedParams) {
+                        let match;
+                        const re = /(:)([_a-zA-Z0-9]+)/gm;
+                        while ((match = re.exec(parametrizedQuery)) !== null) {
                             const paramName = match[2];
                             if (!params.includes(paramName)) {
                                 throw new n8n_workflow_1.NodeOperationError(this.getNode(), `The parameter "${paramName}" is unknown!`);
