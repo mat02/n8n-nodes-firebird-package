@@ -172,110 +172,114 @@ class Firebird {
         const items = this.getInputData();
         const operation = this.getNodeParameter('operation', 0);
         let returnItems = [];
-        let db = undefined;
-        try {
-            db = await fbdAsync.attachAsync(credentials);
-            bluebird_1.promisifyAll(db);
-            if (operation === 'executeQuery') {
-                try {
-                    const queryResult = (await Promise.all(items.map((item, index) => {
-                        var _a;
-                        const rawQuery = this.getNodeParameter('query', index);
-                        const paramsString = this.getNodeParameter('params', 0);
-                        const params = paramsString.split(',').map(param => param.trim());
-                        const insertItems = GenericFunctions_1.copyInputItems([items[index]], params)[0];
-                        let parametrizedQuery = rawQuery;
-                        let queryItems = [];
-                        let match;
-                        const re = /(:)([_a-zA-Z0-9]+)/gm;
-                        while ((match = re.exec(parametrizedQuery)) !== null) {
-                            const paramName = match[2];
-                            if (!params.includes(paramName)) {
-                                throw new n8n_workflow_1.NodeOperationError(this.getNode(), `The parameter "${paramName}" is unknown!`);
-                            }
-                            queryItems.push(insertItems[paramName]);
-                            parametrizedQuery = parametrizedQuery.substring(0, match.index) + '?' + parametrizedQuery.substring(((_a = match.index) !== null && _a !== void 0 ? _a : 0) + 1 + match[2].length);
+        if (operation === 'executeQuery') {
+            try {
+                const queryResult = (await Promise.all(items.map(async (item, index) => {
+                    var _a;
+                    let db = await fbdAsync.attachAsync(credentials);
+                    bluebird_1.promisifyAll(db);
+                    const rawQuery = this.getNodeParameter('query', index);
+                    const paramsString = this.getNodeParameter('params', 0);
+                    const params = paramsString.split(',').map(param => param.trim());
+                    const insertItems = GenericFunctions_1.copyInputItems([items[index]], params)[0];
+                    let parametrizedQuery = rawQuery;
+                    let queryItems = [];
+                    let match;
+                    const re = /(:)([_a-zA-Z0-9]+)/gm;
+                    while ((match = re.exec(parametrizedQuery)) !== null) {
+                        const paramName = match[2];
+                        if (!params.includes(paramName)) {
+                            throw new n8n_workflow_1.NodeOperationError(this.getNode(), `The parameter "${paramName}" is unknown!`);
                         }
-                        if (queryItems.length > 0) {
-                            return db.queryAsync(parametrizedQuery, queryItems);
-                        }
-                        else {
-                            return db.queryAsync(rawQuery);
-                        }
-                    }))).reduce((collection, result) => {
-                        if (Array.isArray(result)) {
-                            return collection.concat(result);
-                        }
-                        collection.push(result);
-                        return collection;
-                    }, []);
-                    returnItems = this.helpers.returnJsonArray(queryResult);
-                }
-                catch (error) {
-                    if (this.continueOnFail()) {
-                        returnItems = this.helpers.returnJsonArray({ error: error.message });
+                        queryItems.push(insertItems[paramName]);
+                        parametrizedQuery = parametrizedQuery.substring(0, match.index) + '?' + parametrizedQuery.substring(((_a = match.index) !== null && _a !== void 0 ? _a : 0) + 1 + match[2].length);
+                    }
+                    let result;
+                    if (queryItems.length > 0) {
+                        result = await db.queryAsync(parametrizedQuery, queryItems);
                     }
                     else {
-                        throw error;
+                        result = await db.queryAsync(rawQuery);
                     }
-                }
+                    db.detachAsync();
+                    return result;
+                }))).reduce((collection, result) => {
+                    if (Array.isArray(result)) {
+                        return collection.concat(result);
+                    }
+                    collection.push(result);
+                    return collection;
+                }, []);
+                returnItems = this.helpers.returnJsonArray(queryResult);
             }
-            else if (operation === 'insert') {
-                try {
-                    const table = this.getNodeParameter('table', 0);
-                    const columnString = this.getNodeParameter('columns', 0);
-                    const columns = columnString.split(',').map(column => column.trim());
-                    const insertItems = GenericFunctions_1.copyInputItems(items, columns);
-                    const insertPlaceholder = `(${columns.map(column => '?').join(',')})`;
-                    const insertSQL = `INSERT INTO ${table}(${columnString}) VALUES ${items.map(item => insertPlaceholder).join(',')};`;
-                    const queryItems = insertItems.reduce((collection, item) => collection.concat(Object.values(item)), []);
-                    returnItems = await db.queryAsync(insertSQL, queryItems);
-                    returnItems = this.helpers.returnJsonArray(returnItems[0]);
-                }
-                catch (error) {
-                    if (this.continueOnFail()) {
-                        returnItems = this.helpers.returnJsonArray({ error: error.message });
-                    }
-                    else {
-                        throw error;
-                    }
-                }
-            }
-            else if (operation === 'update') {
-                try {
-                    const table = this.getNodeParameter('table', 0);
-                    const updateKey = this.getNodeParameter('updateKey', 0);
-                    const columnString = this.getNodeParameter('columns', 0);
-                    const columns = columnString.split(',').map(column => column.trim());
-                    if (!columns.includes(updateKey)) {
-                        columns.unshift(updateKey);
-                    }
-                    const updateItems = GenericFunctions_1.copyInputItems(items, columns);
-                    const updateSQL = `UPDATE ${table} SET ${columns.map(column => `${column} = ?`).join(',')} WHERE ${updateKey} = ?;`;
-                    const queryResult = await Promise.all(updateItems.map((item) => db.queryAsync(updateSQL, Object.values(item).concat(item[updateKey]))));
-                    returnItems = this.helpers.returnJsonArray(returnItems[0]);
-                }
-                catch (error) {
-                    if (this.continueOnFail()) {
-                        returnItems = this.helpers.returnJsonArray({ error: error.message });
-                    }
-                    else {
-                        throw error;
-                    }
-                }
-            }
-            else {
+            catch (error) {
                 if (this.continueOnFail()) {
-                    returnItems = this.helpers.returnJsonArray({ error: `The operation "${operation}" is not supported!` });
+                    returnItems = this.helpers.returnJsonArray({ error: error.message });
                 }
                 else {
-                    throw new n8n_workflow_1.NodeOperationError(this.getNode(), `The operation "${operation}" is not supported!`);
+                    throw error;
                 }
             }
         }
-        finally {
-            if (db !== null && db !== undefined) {
-                await db.detachAsync();
+        else if (operation === 'insert') {
+            try {
+                const table = this.getNodeParameter('table', 0);
+                const columnString = this.getNodeParameter('columns', 0);
+                const columns = columnString.split(',').map(column => column.trim());
+                const insertItems = GenericFunctions_1.copyInputItems(items, columns);
+                const insertPlaceholder = `(${columns.map(column => '?').join(',')})`;
+                const insertSQL = `INSERT INTO ${table}(${columnString}) VALUES ${items.map(item => insertPlaceholder).join(',')};`;
+                const queryItems = insertItems.reduce((collection, item) => collection.concat(Object.values(item)), []);
+                let db = await fbdAsync.attachAsync(credentials);
+                bluebird_1.promisifyAll(db);
+                returnItems = await db.queryAsync(insertSQL, queryItems);
+                db.detachAsync();
+                returnItems = this.helpers.returnJsonArray(returnItems[0]);
+            }
+            catch (error) {
+                if (this.continueOnFail()) {
+                    returnItems = this.helpers.returnJsonArray({ error: error.message });
+                }
+                else {
+                    throw error;
+                }
+            }
+        }
+        else if (operation === 'update') {
+            try {
+                const table = this.getNodeParameter('table', 0);
+                const updateKey = this.getNodeParameter('updateKey', 0);
+                const columnString = this.getNodeParameter('columns', 0);
+                const columns = columnString.split(',').map(column => column.trim());
+                if (!columns.includes(updateKey)) {
+                    columns.unshift(updateKey);
+                }
+                const updateItems = GenericFunctions_1.copyInputItems(items, columns);
+                const updateSQL = `UPDATE ${table} SET ${columns.map(column => `${column} = ?`).join(',')} WHERE ${updateKey} = ?;`;
+                const queryResult = await Promise.all(updateItems.map(async (item) => {
+                    let db = await fbdAsync.attachAsync(credentials);
+                    bluebird_1.promisifyAll(db);
+                    let result = await db.queryAsync(updateSQL, Object.values(item).concat(item[updateKey]));
+                    db.detachAsync();
+                    return result;
+                }));
+                returnItems = this.helpers.returnJsonArray(returnItems[0]);
+            }
+            catch (error) {
+                if (this.continueOnFail()) {
+                    returnItems = this.helpers.returnJsonArray({ error: error.message });
+                }
+                else {
+                    throw error;
+                }
+            }
+        }
+        else {
+            if (this.continueOnFail()) {
+                returnItems = this.helpers.returnJsonArray({ error: `The operation "${operation}" is not supported!` });
+            }
+            else {
+                throw new n8n_workflow_1.NodeOperationError(this.getNode(), `The operation "${operation}" is not supported!`);
             }
         }
         return this.prepareOutputData(returnItems);
