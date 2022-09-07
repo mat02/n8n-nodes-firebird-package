@@ -207,6 +207,9 @@ class Firebird {
                     db.detachAsync();
                     return result;
                 }))).reduce((collection, result) => {
+                    if (result === undefined) {
+                        result = {};
+                    }
                     if (Array.isArray(result)) {
                         return collection.concat(result);
                     }
