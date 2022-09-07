@@ -238,6 +238,9 @@ export class Firebird implements INodeType {
 					db.detachAsync();
 					return result;
 				})) as any[]).reduce((collection, result) => {
+					if (result === undefined) {
+						result = {};
+					}
 					if (Array.isArray(result)) {
 						return collection.concat(result);
 					}
