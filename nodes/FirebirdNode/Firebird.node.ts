@@ -214,10 +214,13 @@ export class Firebird implements INodeType {
 					let queryItems: any[] = [];
 					let match;
 
-					const re = /(:)([_a-zA-Z0-9]+)/gm;
+					const re = /'[^']+'|(:)([_a-zA-Z0-9]+)/gm;
 
 					while ((match = re.exec(parametrizedQuery)) !== null)
 					{
+						if (match[2] === undefined) {
+							continue;
+						}
 						const paramName = match[2];
 						if (!params.includes(paramName)) {
 							throw new NodeOperationError(this.getNode(), `The parameter "${paramName}" is unknown!`);
