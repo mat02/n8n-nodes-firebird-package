@@ -161,6 +161,17 @@ class Firebird {
                     placeholder: 'name,description',
                     description: 'Comma separated list of the properties which should used as columns for rows to update.',
                 },
+                {
+                    displayName: 'Timeout',
+                    name: 'timeout',
+                    type: 'number',
+                    typeOptions: {
+                        minValue: 1,
+                        numberStepSize: 1,
+                    },
+                    default: 10,
+                    description: 'Timeout for the operation.',
+                },
             ],
         };
     }
@@ -169,6 +180,8 @@ class Firebird {
         if (credentials === undefined) {
             throw new n8n_workflow_1.NodeOperationError(this.getNode(), 'No credentials got returned!');
         }
+        const timeout = this.getNodeParameter('timeout', 0);
+        credentials.timeout = timeout;
         const items = this.getInputData();
         const operation = this.getNodeParameter('operation', 0);
         let returnItems = [];
