@@ -182,6 +182,17 @@ export class Firebird implements INodeType {
 				placeholder: 'name,description',
 				description: 'Comma separated list of the properties which should used as columns for rows to update.',
 			},
+			{
+				displayName: 'Timeout',
+				name: 'timeout',
+				type: 'number',
+				typeOptions: {
+					minValue: 1,
+					numberStepSize: 1,
+				},
+				default: 10,
+				description: 'Timeout for the operation.',
+			},
 		],
 	};
 
@@ -191,6 +202,9 @@ export class Firebird implements INodeType {
 		if (credentials === undefined) {
 			throw new NodeOperationError(this.getNode(), 'No credentials got returned!');
 		}
+
+		const timeout = this.getNodeParameter('timeout', 0) as number;
+		credentials.timeout = timeout;
 
 		const items = this.getInputData();
 		const operation = this.getNodeParameter('operation', 0) as string;
