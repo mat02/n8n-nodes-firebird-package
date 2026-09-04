@@ -68,6 +68,23 @@ class Firebird {
                 default: false,
                 description: 'Set to true to lowercase keys.',
             },
+            {
+                displayName: 'WireCrypt',
+                name: 'wireCrypt',
+                type: 'options',
+                options: [
+                    {
+                        name: 'Disabled',
+                        value: 0,
+                    },
+                    {
+                        name: 'Enabled',
+                        value: 1,
+                    },
+                ],
+                default: 0,
+                description: 'Enable encrypted network transport when supported by the Firebird server.',
+            },
         ];
     }
 }
