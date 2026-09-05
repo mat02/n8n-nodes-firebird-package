@@ -51,12 +51,31 @@ function numberValue(environment, name, defaultValue) {
 	return value;
 }
 
+function setting(environment, name, defaultValue) {
+	return process.env[name] ? process.env[name] : (environment[name] === undefined ? defaultValue : environment[name]);
+}
+
+function diagnostic(message) {
+	if (process.env.FIREBIRD_SMOKE_DIAGNOSTICS === '1') {
+		console.log(`[smoke-debug] +${Date.now() - global.smokeStartedAt}ms ${message}`);
+	}
+}
+
 async function main() {
+	global.smokeStartedAt = Date.now();
+	diagnostic('loading local configuration');
 	const environment = loadEnvironment(envPath);
+	const smokeTimeout = numberValue({ FIREBIRD_SMOKE_TIMEOUT: setting(environment, 'FIREBIRD_SMOKE_TIMEOUT', 30) }, 'FIREBIRD_SMOKE_TIMEOUT', 30);
+	const timeoutId = setTimeout(() => {
+		console.error(`Smoke query timed out after ${smokeTimeout} seconds.`);
+		process.exit(1);
+	}, smokeTimeout * 1000);
 	const nodePath = path.resolve(__dirname, '..', 'dist', 'nodes', 'FirebirdNode', 'Firebird.node.js');
 	if (!fs.existsSync(nodePath)) {
 		throw new Error('Compiled node not found. Run the smoke test through the ephemeral build container.');
 	}
+	const wireCrypt = numberValue({ FIREBIRD_WIRE_CRYPT: setting(environment, 'FIREBIRD_WIRE_CRYPT', 1) }, 'FIREBIRD_WIRE_CRYPT', 1);
+	const pluginName = setting(environment, 'FIREBIRD_PLUGIN_NAME', '');
 	const credentials = {
 		host: required(environment, 'FIREBIRD_HOST'),
 		port: numberValue(environment, 'FIREBIRD_PORT', 3050),
@@ -67,20 +86,28 @@ async function main() {
 		retryConnectionInterval: 1000,
 		pageSize: 4096,
 		lowercase_keys: false,
-		wireCrypt: numberValue(environment, 'FIREBIRD_WIRE_CRYPT', 1),
+		wireCrypt,
 	};
+	if (pluginName) {
+		credentials.pluginName = pluginName;
+	}
 	const timeout = numberValue(environment, 'FIREBIRD_TIMEOUT', 10);
+	const driverVersion = require('node-firebird/package.json').version;
+	diagnostic(`loaded node-firebird=${driverVersion}, wireCrypt=${wireCrypt}, plugin=${pluginName || 'automatic'}`);
 	const { Firebird } = require(nodePath);
 	const node = new Firebird();
 	const parameters = {
 		operation: 'executeQuery',
-		query: 'SELECT 1 AS SMOKE_RESULT FROM RDB$DATABASE',
+		query: "SELECT 1 AS SMOKE_RESULT, RDB$GET_CONTEXT('SYSTEM', 'WIRE_ENCRYPTED') AS WIRE_ENCRYPTED FROM RDB$DATABASE",
 		params: '',
 		timeout,
 	};
 
 	const context = {
-		getCredentials: async () => credentials,
+		getCredentials: async () => {
+			diagnostic('n8n node requested credentials');
+			return credentials;
+		},
 		getNode: () => ({ name: 'Firebird smoke test' }),
 		getNodeParameter: (name) => parameters[name],
 		getInputData: () => [{ json: {} }],
@@ -91,13 +118,19 @@ async function main() {
 		prepareOutputData: (items) => [items],
 	};
 
+	diagnostic('invoking Firebird.execute');
 	const result = await node.execute.call(context);
+	diagnostic('Firebird.execute resolved');
 	const row = result[0] && result[0][0] && result[0][0].json;
 	if (!row || row.SMOKE_RESULT !== 1) {
 		throw new Error('The node did not return SMOKE_RESULT = 1.');
 	}
+	if (credentials.wireCrypt === 1 && row.WIRE_ENCRYPTED !== 'TRUE') {
+		throw new Error(`WireCrypt was enabled, but the server reported WIRE_ENCRYPTED = ${row.WIRE_ENCRYPTED || 'NULL'}.`);
+	}
 
-	console.log(`Smoke query succeeded with WireCrypt=${credentials.wireCrypt} against ${credentials.host}:${credentials.port}.`);
+	clearTimeout(timeoutId);
+	console.log(`Smoke query succeeded with node-firebird=${driverVersion}, WireCrypt=${credentials.wireCrypt}, WIRE_ENCRYPTED=${row.WIRE_ENCRYPTED || 'NULL'} against ${credentials.host}:${credentials.port}.`);
 }
 
 main().catch((error) => {

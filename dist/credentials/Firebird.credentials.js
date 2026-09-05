@@ -85,6 +85,31 @@ class Firebird {
                 default: 0,
                 description: 'Enable encrypted network transport when supported by the Firebird server.',
             },
+            {
+                displayName: 'Authentication Plugin',
+                name: 'pluginName',
+                type: 'options',
+                options: [
+                    {
+                        name: 'Automatic',
+                        value: '',
+                    },
+                    {
+                        name: 'Srp',
+                        value: 'Srp',
+                    },
+                    {
+                        name: 'Srp256',
+                        value: 'Srp256',
+                    },
+                    {
+                        name: 'Legacy Auth',
+                        value: 'Legacy_Auth',
+                    },
+                ],
+                default: 'Srp',
+                description: 'Select the Firebird authentication plugin. Srp is the recommended default. Use Legacy Auth only when required by the server.',
+            },
         ];
     }
 }
