@@ -4,7 +4,10 @@ exports.Firebird = void 0;
 const n8n_workflow_1 = require("n8n-workflow");
 const bluebird_1 = require("bluebird");
 const fbd = require("node-firebird");
-const fbdAsync = bluebird_1.promisifyAll(fbd);
+const fbdAsync = typeof fbd.attachAsync === 'function' ? fbd : bluebird_1.promisifyAll(fbd);
+function asyncDatabase(db) {
+    return typeof db.queryAsync === 'function' ? db : bluebird_1.promisifyAll(db);
+}
 const GenericFunctions_1 = require("./GenericFunctions");
 class Firebird {
     constructor() {
@@ -189,8 +192,7 @@ class Firebird {
             try {
                 const queryResult = (await Promise.all(items.map(async (item, index) => {
                     var _a;
-                    let db = await fbdAsync.attachAsync(credentials);
-                    bluebird_1.promisifyAll(db);
+                    const db = asyncDatabase(await fbdAsync.attachAsync(credentials));
                     const rawQuery = this.getNodeParameter('query', index);
                     const paramsString = this.getNodeParameter('params', 0);
                     const params = paramsString.split(',').map(param => param.trim());
@@ -249,8 +251,7 @@ class Firebird {
                 const insertPlaceholder = `(${columns.map(column => '?').join(',')})`;
                 const insertSQL = `INSERT INTO ${table}(${columnString}) VALUES ${items.map(item => insertPlaceholder).join(',')};`;
                 const queryItems = insertItems.reduce((collection, item) => collection.concat(Object.values(item)), []);
-                let db = await fbdAsync.attachAsync(credentials);
-                bluebird_1.promisifyAll(db);
+                const db = asyncDatabase(await fbdAsync.attachAsync(credentials));
                 returnItems = await db.queryAsync(insertSQL, queryItems);
                 db.detachAsync();
                 returnItems = this.helpers.returnJsonArray(returnItems[0]);
@@ -276,9 +277,8 @@ class Firebird {
                 const updateItems = GenericFunctions_1.copyInputItems(items, columns);
                 const updateSQL = `UPDATE ${table} SET ${columns.map(column => `${column} = ?`).join(',')} WHERE ${updateKey} = ?;`;
                 const queryResult = await Promise.all(updateItems.map(async (item) => {
-                    let db = await fbdAsync.attachAsync(credentials);
-                    bluebird_1.promisifyAll(db);
-                    let result = await db.queryAsync(updateSQL, Object.values(item).concat(item[updateKey]));
+                    const db = asyncDatabase(await fbdAsync.attachAsync(credentials));
+                    const result = await db.queryAsync(updateSQL, Object.values(item).concat(item[updateKey]));
                     db.detachAsync();
                     return result;
                 }));
