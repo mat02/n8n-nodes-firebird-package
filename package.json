@@ -51,7 +51,7 @@
         "bluebird": "~3.7.2",
         "n8n-core": "~0.101.0",
         "n8n-workflow": "~0.83.0",
-        "node-firebird": "2.2.0"
+        "node-firebird": "2.8.1"
     },
     "jest": {
         "transform": {

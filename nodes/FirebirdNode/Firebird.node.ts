@@ -10,7 +10,11 @@ import {
 import { promisifyAll } from 'bluebird';
 import * as fbd from 'node-firebird';
 
-const fbdAsync: any = promisifyAll(fbd);
+const fbdAsync: any = typeof (fbd as any).attachAsync === 'function' ? fbd : promisifyAll(fbd);
+
+function asyncDatabase(db: any): any {
+	return typeof db.queryAsync === 'function' ? db : promisifyAll(db);
+}
 
 import { copyInputItems } from './GenericFunctions';
 
@@ -216,8 +220,7 @@ export class Firebird implements INodeType {
 			// ----------------------------------
 			try {
 				const queryResult = (await Promise.all(items.map(async (item, index) => {
-					let db = await fbdAsync.attachAsync(credentials);
-					promisifyAll(db);
+					const db = asyncDatabase(await fbdAsync.attachAsync(credentials));
 					const rawQuery = this.getNodeParameter('query', index) as string;
 					const paramsString = this.getNodeParameter('params', 0) as string;
 					const params = paramsString.split(',').map(param => param.trim());
@@ -285,8 +288,7 @@ export class Firebird implements INodeType {
 				const insertSQL = `INSERT INTO ${table}(${columnString}) VALUES ${items.map(item => insertPlaceholder).join(',')};`;
 				const queryItems = insertItems.reduce((collection, item) => collection.concat(Object.values(item as any)), []); // tslint:disable-line:no-any
 				
-				let db = await fbdAsync.attachAsync(credentials);
-				promisifyAll(db);
+				const db = asyncDatabase(await fbdAsync.attachAsync(credentials));
 				returnItems = await db.queryAsync(insertSQL, queryItems);
 				db.detachAsync();
 				returnItems = this.helpers.returnJsonArray(returnItems[0] as unknown as IDataObject);
@@ -317,9 +319,8 @@ export class Firebird implements INodeType {
 				const updateSQL = `UPDATE ${table} SET ${columns.map(column => `${column} = ?`).join(',')} WHERE ${updateKey} = ?;`;
 
 				const queryResult = await Promise.all(updateItems.map(async (item) => {
-					let db = await fbdAsync.attachAsync(credentials);
-					promisifyAll(db);
-					let result = await db.queryAsync(updateSQL, Object.values(item).concat(item[updateKey]));
+					const db = asyncDatabase(await fbdAsync.attachAsync(credentials));
+					const result = await db.queryAsync(updateSQL, Object.values(item).concat(item[updateKey]));
 					db.detachAsync();
 					return result;
 				}));
