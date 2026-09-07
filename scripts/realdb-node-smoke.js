@@ -61,11 +61,20 @@ function diagnostic(message) {
 	}
 }
 
+function errorDetails(error) {
+	const gdscode = error && error.gdscode;
+	return gdscode === undefined ? error.message : `${error.message} (gdscode=${gdscode})`;
+}
+
 async function main() {
 	global.smokeStartedAt = Date.now();
 	diagnostic('loading local configuration');
 	const environment = loadEnvironment(envPath);
 	const smokeTimeout = numberValue({ FIREBIRD_SMOKE_TIMEOUT: setting(environment, 'FIREBIRD_SMOKE_TIMEOUT', 30) }, 'FIREBIRD_SMOKE_TIMEOUT', 30);
+	const iterations = numberValue({ FIREBIRD_SMOKE_ITERATIONS: setting(environment, 'FIREBIRD_SMOKE_ITERATIONS', 1) }, 'FIREBIRD_SMOKE_ITERATIONS', 1);
+	if (!Number.isInteger(iterations) || iterations < 1) {
+		throw new Error('FIREBIRD_SMOKE_ITERATIONS must be a positive integer.');
+	}
 	const timeoutId = setTimeout(() => {
 		console.error(`Smoke query timed out after ${smokeTimeout} seconds.`);
 		process.exit(1);
@@ -118,22 +127,31 @@ async function main() {
 		prepareOutputData: (items) => [items],
 	};
 
-	diagnostic('invoking Firebird.execute');
-	const result = await node.execute.call(context);
-	diagnostic('Firebird.execute resolved');
-	const row = result[0] && result[0][0] && result[0][0].json;
-	if (!row || row.SMOKE_RESULT !== 1) {
-		throw new Error('The node did not return SMOKE_RESULT = 1.');
-	}
-	if (credentials.wireCrypt === 1 && row.WIRE_ENCRYPTED !== 'TRUE') {
-		throw new Error(`WireCrypt was enabled, but the server reported WIRE_ENCRYPTED = ${row.WIRE_ENCRYPTED || 'NULL'}.`);
+	for (let iteration = 1; iteration <= iterations; iteration++) {
+		try {
+			diagnostic(`invoking Firebird.execute iteration=${iteration}/${iterations}`);
+			const result = await node.execute.call(context);
+			const row = result[0] && result[0][0] && result[0][0].json;
+			if (!row || row.SMOKE_RESULT !== 1) {
+				throw new Error('The node did not return SMOKE_RESULT = 1.');
+			}
+			if (credentials.wireCrypt === 1 && row.WIRE_ENCRYPTED !== 'TRUE') {
+				throw new Error(`WireCrypt was enabled, but the server reported WIRE_ENCRYPTED = ${row.WIRE_ENCRYPTED || 'NULL'}.`);
+			}
+		} catch (error) {
+			throw new Error(`Smoke iteration ${iteration}/${iterations} failed: ${errorDetails(error)}`);
+		}
+
+		if (iterations > 1 && (iteration % 100 === 0 || iteration === iterations)) {
+			console.log(`Smoke progress: ${iteration}/${iterations} successful attachments.`);
+		}
 	}
 
 	clearTimeout(timeoutId);
-	console.log(`Smoke query succeeded with node-firebird=${driverVersion}, WireCrypt=${credentials.wireCrypt}, WIRE_ENCRYPTED=${row.WIRE_ENCRYPTED || 'NULL'} against ${credentials.host}:${credentials.port}.`);
+	console.log(`Smoke query succeeded with node-firebird=${driverVersion}, iterations=${iterations}, WireCrypt=${credentials.wireCrypt} against ${credentials.host}:${credentials.port}.`);
 }
 
 main().catch((error) => {
 	console.error(`Smoke query failed: ${error.message}`);
-	process.exitCode = 1;
+	process.exit(1);
 });
